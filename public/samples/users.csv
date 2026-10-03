@@ -1,0 +1,4 @@
+user_name,email,user_id,password,role
+Alex Taylor,alex.taylor@example.com,tech-001,,technician
+Jordan Lee,jordan.lee@example.com,book-001,,book_keeper
+Morgan Patel,morgan.patel@example.com,manager-001,,store_manager
