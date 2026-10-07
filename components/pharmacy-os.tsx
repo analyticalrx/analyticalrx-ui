@@ -1,13 +1,14 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { RoleDashboard } from "@/components/role-dashboard";
 import { UserManagement } from "@/components/user-management";
+import { TaskManagement } from "@/components/task-management";
 import { roleLabels, workflows } from "@/lib/data";
 import type { Role, Section, WorkflowStatus, WorkflowStepType } from "@/lib/types";
 
-type IconName = "grid" | "flow" | "store" | "bell" | "search" | "play" | "chevron" | "pulse" | "shield" | "clock" | "plus" | "menu";
+type IconName = "grid" | "flow" | "store" | "bell" | "search" | "play" | "chevron" | "pulse" | "shield" | "clock" | "plus" | "menu" | "tasks";
 
 function Icon({ name, size = 18 }: { name: IconName; size?: number }) {
   const paths: Record<IconName, React.ReactNode> = {
@@ -23,6 +24,7 @@ function Icon({ name, size = 18 }: { name: IconName; size?: number }) {
     clock: <><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></>,
     plus: <path d="M12 5v14M5 12h14"/>,
     menu: <path d="M4 7h16M4 12h16M4 17h16"/>,
+    tasks: <><rect x="4" y="3" width="16" height="18" rx="3"/><path d="m7 9 1 1 2-2M13 9h4m-10 6 1 1 2-2M13 15h4"/></>,
   };
   return <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">{paths[name]}</svg>;
 }
@@ -50,6 +52,49 @@ export function PharmacyOS({
   const [running, setRunning] = useState(false);
   const [notice, setNotice] = useState("");
   const [mobileNav, setMobileNav] = useState(false);
+  const [compactNav, setCompactNav] = useState(false);
+  const sidebar = useRef<HTMLElement>(null);
+  const menuButton = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    const query = window.matchMedia("(max-width: 1024px)");
+    const update = () => {
+      setCompactNav(query.matches);
+      if (!query.matches) setMobileNav(false);
+    };
+    update();
+    query.addEventListener("change", update);
+    return () => query.removeEventListener("change", update);
+  }, []);
+
+  useEffect(() => {
+    if (!mobileNav || !compactNav) return;
+    const panel = sidebar.current;
+    if (!panel) return;
+    const scrollY = window.scrollY;
+    const body = document.body;
+    const previous = { position: body.style.position, top: body.style.top, width: body.style.width, overflow: body.style.overflow };
+    Object.assign(body.style, { position: "fixed", top: `-${scrollY}px`, width: "100%", overflow: "hidden" });
+    const focusable = () => Array.from(panel.querySelectorAll<HTMLElement>("button:not(:disabled), select, a[href], [tabindex='0']"));
+    const focusFrame = window.requestAnimationFrame(() => focusable()[0]?.focus({ preventScroll: true }));
+    function handleKey(event: KeyboardEvent) {
+      if (event.key === "Escape") { event.preventDefault(); setMobileNav(false); }
+      if (event.key !== "Tab") return;
+      const items = focusable();
+      const first = items[0], last = items[items.length - 1];
+      if (!panel?.contains(document.activeElement)) { event.preventDefault(); first?.focus(); }
+      else if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+    }
+    document.addEventListener("keydown", handleKey);
+    return () => {
+      window.cancelAnimationFrame(focusFrame);
+      document.removeEventListener("keydown", handleKey);
+      Object.assign(body.style, previous);
+      window.scrollTo(0, scrollY);
+      if (window.matchMedia("(max-width: 1024px)").matches) menuButton.current?.focus({ preventScroll: true });
+    };
+  }, [mobileNav, compactNav]);
 
   const filteredWorkflows = useMemo(() => workflows.filter((workflow) => `${workflow.name} ${workflow.category}`.toLowerCase().includes(query.toLowerCase())), [query]);
   const selectedWorkflow = workflows.find((workflow) => workflow.id === selectedWorkflowId) ?? workflows[0];
@@ -75,24 +120,26 @@ export function PharmacyOS({
 
   return (
     <div className="app-shell">
-      <aside className={`sidebar ${mobileNav ? "sidebar-open" : ""}`}>
+      <aside ref={sidebar} id="workspace-navigation" className={`sidebar ${mobileNav ? "sidebar-open" : ""}`} role={compactNav && mobileNav ? "dialog" : undefined} aria-modal={compactNav && mobileNav ? true : undefined} aria-label="Workspace navigation">
+        <button className="nav-close" onClick={() => setMobileNav(false)} aria-label="Close navigation">×</button>
         <div className="brand"><div className="brand-mark">A</div><div><strong>AnalyticalRx</strong><span>Operations cloud</span></div></div>
         <div className="workspace-pill"><span className="workspace-avatar">AR</span><div><small>Workspace</small><b>{role === "internal_platform_admin" ? "Platform administration" : tenantId ? `Tenant ${tenantId}` : "Your tenant"}</b></div><Icon name="chevron" size={14}/></div>
-        {allowedRoles.length > 1 && <label className="workspace-role-select">Switch dashboard<select aria-label="Switch role dashboard" value={role} onChange={(event) => router.push(`/${event.target.value}`)}>{allowedRoles.map((item) => <option key={item} value={item}>{roleLabels[item]}</option>)}</select></label>}
+        {allowedRoles.length > 1 && <label className="workspace-role-select">Switch dashboard<select aria-label="Switch role dashboard" value={role} onChange={(event) => { setMobileNav(false); router.push(`/${event.target.value}`); }}>{allowedRoles.map((item) => <option key={item} value={item}>{roleLabels[item]}</option>)}</select></label>}
         <nav aria-label="Primary navigation">
           <p className="nav-label">Workspace</p>
           <button className={section === "overview" ? "nav-item active" : "nav-item"} onClick={() => { setSection("overview"); setMobileNav(false); }}><Icon name="grid"/><span>Overview</span></button>
+          <button className={section === "tasks" ? "nav-item active" : "nav-item"} onClick={() => { setSection("tasks"); setMobileNav(false); }}><Icon name="tasks"/><span>Tasks</span></button>
           {canManageWorkflows && <button className={section === "workflows" ? "nav-item active" : "nav-item"} onClick={() => { setSection("workflows"); setMobileNav(false); }}><Icon name="flow"/><span>Automations</span><em>{workflows.length}</em></button>}
         </nav>
         {canManageUsers && <nav aria-label="Administration"><p className="nav-label role-label">Administration</p><button className={section === "users" ? "nav-item active" : "nav-item"} onClick={() => { setSection("users"); setMobileNav(false); }}><Icon name="shield"/><span>User management</span></button></nav>}
         <div className="sidebar-foot"><div className="system-state"><span></span><div><b>Authenticated workspace</b><small>Dashboard data not connected</small></div></div><div className="user-card"><div className="user-avatar">{userInitials}</div><div><b>{userName}</b><span>{roleLabels[role]} access</span></div><button onClick={onLogout} aria-label="Sign out">Sign out</button></div></div>
       </aside>
 
-      <main className="main-area">
-        <header className="topbar"><button className="mobile-menu" onClick={() => setMobileNav(!mobileNav)} aria-label="Toggle navigation"><Icon name="menu"/></button><div className="crumb"><span>{role === "internal_platform_admin" ? "Platform" : "Your workspace"}</span><Icon name="chevron" size={13}/><b>{section === "overview" ? roleLabels[role] : section === "users" ? "User management" : "Automations"}</b></div><div className="top-actions"><div className="secure-badge"><Icon name="shield" size={14}/>Verified session</div></div></header>
+      <main className="main-area" inert={mobileNav && compactNav}>
+        <header className="topbar"><button ref={menuButton} className="mobile-menu" onClick={() => setMobileNav(!mobileNav)} aria-label="Open navigation" aria-expanded={mobileNav} aria-controls="workspace-navigation"><Icon name="menu"/></button><div className="crumb"><span>{role === "internal_platform_admin" ? "Platform" : "Your workspace"}</span><Icon name="chevron" size={13}/><b>{section === "overview" ? roleLabels[role] : section === "users" ? "User management" : section === "tasks" ? "Tasks" : "Automations"}</b></div><div className="top-actions"><div className="secure-badge"><Icon name="shield" size={14}/>Verified session</div></div></header>
 
         {canManageUsers && <div hidden={section !== "users"}><UserManagement tenantId={tenantId} /></div>}
-        {section === "users" ? null : section === "overview" ? (
+        {section === "tasks" ? <TaskManagement /> : section === "users" ? null : section === "overview" ? (
           <RoleDashboard key={role} role={role} tenantId={tenantId} />
         ) : (
           <div className="workflow-preview-container"><div className="workflow-preview-banner">Workflow preview · Sample definitions only. Changes and tests do not run automations or modify backend records.</div><div className="automation-layout">
@@ -103,8 +150,8 @@ export function PharmacyOS({
           </div>
         )}
       </main>
-      {notice && <div className="toast"><span>✓</span>{notice}</div>}
-      {mobileNav && <button className="nav-scrim" onClick={() => setMobileNav(false)} aria-label="Close navigation"></button>}
+      {notice && <div className="toast" role="status"><span>✓</span>{notice}</div>}
+      {mobileNav && <div className="nav-scrim" onClick={() => setMobileNav(false)} aria-hidden="true"></div>}
     </div>
   );
 }

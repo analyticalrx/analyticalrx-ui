@@ -1,5 +1,7 @@
 # AnalyticalRx UI
 
+For the completed responsiveness and task-management work, see the [UI change log — 7 October 2026](docs/ui-change-log-2026-10-07.md). It includes the file inventory, API coverage, role permissions, verification results, limitations, and future responsiveness requirements.
+
 AnalyticalRx UI is the frontend for a multi-tenant pharmacy operations platform. It lets users sign in through the Data Platform backend and opens a workspace based on the verified role in their JWT. Owners can view portfolio dashboards, explore the workflow studio, and prepare individual or bulk user additions.
 
 The project uses Next.js 16.3.1 (App Router), React 19, TypeScript, and `jose` for server-side JWT verification. Authentication is connected to the backend. Dashboards default to unavailable states with optional, clearly labeled sample previews. Workflows and user administration remain frontend previews.
@@ -14,6 +16,9 @@ The project uses Next.js 16.3.1 (App Router), React 19, TypeScript, and `jose` f
 | `app/[role]/page.tsx`, `components/role-workspace.tsx` | Role-specific pages and redirects to the user's verified workspace. |
 | `components/pharmacy-os.tsx` | Main navigation, dashboards, pharmacy filters, and owner workflow studio. |
 | `components/user-management.tsx` | Owner/tenant-admin form, CSV upload/review, and searchable draft user list. |
+| `components/task-management.tsx` | Live task list, creation, details, status updates, and comments, available from every role's navigation. |
+| `lib/tasks.ts`, `app/api/tasks/` | Task contracts, validation, and authenticated backend forwarding. |
+| `app/api/me/`, `app/api/pharmacies/` | Current effective permissions and accessible pharmacy choices. |
 | `lib/user-management.ts` | User validation, CSV parsing, duplicate detection, and allowed assignment roles. |
 | `public/samples/users.csv` | Downloadable example for bulk user import. |
 | `app/api/auth/` | Frontend server routes for backend login/logout and bearer session verification. |
@@ -140,6 +145,32 @@ The server proxy avoids requiring browser CORS access to Spring Boot. For an asy
 - `npm run build`
 - `GET /api/health`: deployment health check
 
+### Responsive browser checks
+
+The shared responsive styles in `app/responsive.css` cover phone, tablet,
+landscape, and desktop layouts. They include safe-area spacing, dynamic viewport
+heights, 44px touch controls, readable mobile inputs, wrapping filters, and
+horizontal scrolling inside tables. Browser zoom remains enabled. Navigation
+switches to a drawer at 1024px; the drawer manages focus, Escape, background
+scrolling, and resizing back to desktop.
+
+Run the browser suite against a production build:
+
+```sh
+npm run test:responsive:install
+npm run build
+npm run test:responsive
+```
+
+Playwright checks Chromium and Firefox desktop layouts, Android Chromium,
+and iPhone/iPad WebKit emulation. It covers all nine dashboards, record dialogs,
+navigation, user forms and CSV previews, workflow actions, and widths from 320
+to 2560 pixels. Authentication responses are intercepted within the test browser;
+the suite does not require a backend, credentials, or JWT secrets. Browser
+downloads stay in ignored `node_modules`; failure screenshots and traces stay
+in ignored `test-results`. Emulation supplements physical device checks; it does
+not reproduce every mobile keyboard or installed browser version.
+
 ## Troubleshooting
 
 | Message / symptom | Check |
@@ -155,9 +186,59 @@ User creation roles (`technician`, `book_keeper`, `store_manager`) are draft ass
 
 ## Current limits
 
+### Task management
+
+Choose **Tasks** in any role's navigation. This section connects to the existing
+Data Platform APIs using the current bearer session; it is not a sample preview.
+It provides:
+
+- A task list with server-side pharmacy/status filters, local search, and
+  assigned-to-me / created-by-me filters over the loaded result.
+- Creation with title, description, pharmacy, existing assignee user ID,
+  priority, and an optional due date/time. **Assign to me** uses the verified
+  current user ID. A searchable assignee directory is not available in the backend.
+- Task details with assignee, creator, priority, dates, and progress controls.
+- Status updates for an assignee or owner/store manager with effective update
+  permission. Completed, skipped, and canceled tasks cannot be reopened.
+- A chronological comment thread and comment creation for permitted users.
+- Loading, empty, permission, connection-error, and closed-task conflict states.
+
+All task actions use same-origin UI server routes. These routes verify the JWT,
+forward it to the backend, disable caching, validate mutation bodies, and avoid
+forwarding client-supplied tenant/schema fields. The backend remains responsible
+for current permissions, tenant scope, pharmacy access, and record visibility.
+The UI reads `/api/v1/me` for effective permissions rather than treating the
+selected dashboard role as an authorization grant. Expired API sessions clear
+the tab token and return to login.
+
+| UI route | Backend route | Methods |
+| --- | --- | --- |
+| `/api/tasks` | `/api/v1/tasks` | GET, POST |
+| `/api/tasks/{id}` | `/api/v1/tasks/{id}` | GET |
+| `/api/tasks/{id}/status` | `/api/v1/tasks/{id}/status` | PATCH |
+| `/api/tasks/{id}/comments` | `/api/v1/tasks/{id}/comments` | GET, POST |
+| `/api/me` | `/api/v1/me` | GET |
+| `/api/pharmacies` | `/api/v1/pharmacies` | GET |
+
+The current backend grants task access to owners, store managers, pharmacists,
+technicians, bookkeepers, and business development. Technicians cannot create
+tasks. Tenant admin, compliance admin, and internal platform admin can open the
+Tasks section but see an access message unless backend permissions are granted.
+No backend authorization changes are made by this UI implementation.
+
+Lists are limited to the backend's first 100 visible tasks; summaries and local
+filters describe that loaded result. There is no pagination or task deletion API.
+Dates display in the device time zone; creation converts local due dates to ISO
+timestamps. Numeric IDs must fit JavaScript's safe integer range; unsafe IDs are
+rejected instead of silently rounded. Unit tests exercise the real UI forwarding
+routes with a mocked backend. Browser tests exercise all six task contracts and
+responsive task screens across Chromium, Firefox, and mobile WebKit emulation.
+
+### Preview modules
+
 Owners and tenant admins can open **Administration → User management** to add draft users individually or upload a CSV. Supported assignment roles are `technician`, `book_keeper`, and `store_manager`. The page provides a downloadable sample, optional passwords, validation, duplicate checks, and a review step before batch import. Drafts remain in memory while navigating the workspace and disappear on reload/sign-out. No user accounts are created and no passwords are persisted or sent to the backend. The displayed tenant context comes from the verified JWT's `tenant_id` claim. Backend user administration and password reset remain future work.
 
-Dashboard APIs are not connected. Cards show unavailable values until APIs are integrated. Choose **Show sample data** to explore fictional records with date, entity, status, and search filters, sorting, charts, and record details. Sample previews reset when switching roles. Future workflow, inventory, clinical, CRM, and accounting modules explain their missing data. The workflow studio is labeled as a sample preview; publishing is disabled. No dashboard fetches or backend writes are added.
+Dashboard APIs are not connected. Cards show unavailable values until APIs are integrated. Choose **Show sample data** to explore fictional records with date, entity, status, and search filters, sorting, charts, and record details. Sample previews reset when switching roles. Future workflow, inventory, clinical, CRM, and accounting modules explain their missing data. The workflow studio is labeled as a sample preview; publishing is disabled. Task creation, status updates, and comments use live backend APIs; dashboard, workflow, and user-administration previews do not write to the backend.
 
 `lib/dashboards.ts` defines the nine layouts and sample records; `components/role-dashboard.tsx` renders the shared dashboard; `app/dashboard.css` supplies responsive styling. The table-to-role mapping and future data requirements are in [the dashboard data plan](docs/role-dashboard-data-plan.md).
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import type { AuthSession } from "@/lib/auth/types";
 
@@ -11,6 +11,7 @@ interface AuthContextValue {
   message: string;
   login: (email: string, password: string, tenantKey: string) => Promise<void>;
   logout: () => void;
+  apiFetch: (path: string, options?: RequestInit) => Promise<Response>;
 }
 const AuthContext = createContext<AuthContextValue | null>(null);
 
@@ -21,11 +22,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [message, setMessage] = useState("");
   const accessToken = useRef<string | null>(null);
 
-  function clearToken() {
+  const clearToken = useCallback(() => {
     accessToken.current = null;
     try { sessionStorage.removeItem(storageKey); } catch { /* Storage may be disabled. */ }
     setUser(null);
-  }
+  }, []);
+
+  const apiFetch = useCallback(async (path: string, options: RequestInit = {}) => {
+    if (!path.startsWith("/api/")) throw new Error("Use a local API route.");
+    const token = accessToken.current;
+    if (!token) throw new Error("Sign in again to continue.");
+    const headers = new Headers(options.headers);
+    headers.set("Authorization", `Bearer ${token}`);
+    headers.set("Accept", "application/json");
+    if (options.body) headers.set("Content-Type", "application/json");
+    const response = await fetch(path, { ...options, headers, cache: "no-store", redirect: "error" });
+    if (response.status === 401) {
+      clearToken();
+      setMessage("Your session has expired or is no longer available. Sign in again.");
+      router.replace("/login");
+    }
+    return response;
+  }, [clearToken, router]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -52,7 +70,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     void restore();
     return () => controller.abort();
-  }, []);
+  }, [clearToken]);
 
   useEffect(() => {
     if (!user) return;
@@ -71,7 +89,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       window.removeEventListener("focus", checkExpiry);
       document.removeEventListener("visibilitychange", checkExpiry);
     };
-  }, [user, router]);
+  }, [user, router, clearToken]);
 
   async function login(email: string, password: string, tenantKey: string) {
     setMessage("");
@@ -100,7 +118,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }).catch(() => undefined);
   }
 
-  return <AuthContext.Provider value={{ user, loading, message, login, logout }}>{children}</AuthContext.Provider>;
+  return <AuthContext.Provider value={{ user, loading, message, login, logout, apiFetch }}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth() {

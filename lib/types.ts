@@ -1,6 +1,6 @@
 export const supportedRoles = ["owner", "bookkeeper", "technician", "store_manager", "pharmacist", "compliance_admin", "business_development", "tenant_admin", "internal_platform_admin"] as const;
 export type Role = typeof supportedRoles[number];
-export type Section = "overview" | "workflows" | "users";
+export type Section = "overview" | "workflows" | "users" | "tasks";
 export type WorkflowStatus = "active" | "draft" | "attention";
 export type WorkflowStepType = "trigger" | "search" | "loop" | "create" | "email" | "update";
 
