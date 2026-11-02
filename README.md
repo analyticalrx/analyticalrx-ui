@@ -41,23 +41,41 @@ The project uses Next.js 16.3.1 (App Router), React 19, TypeScript, and `jose` f
 - The same JWT signing secret, issuer, and audience used by the backend.
 - AWS CLI and access to Secrets Manager if retrieving the signing secret from AWS.
 
-The backend needs its database connection and SSM tunnel running separately. See [backend setup](../data-platform/README.md). The UI itself does not need database credentials.
+The backend needs its database connection and SSM tunnel running separately.
+Follow the local setup in the `data-platform` repository's `README.md`. The UI
+itself does not need database credentials.
 
 ### 1. Install dependencies
 
-In Windows Command Prompt:
+Open a terminal in this repository and install the locked dependencies:
 
-```bat
-cd /d C:\analytical_rx\UI
+Windows PowerShell:
+
+```powershell
+npm ci
+```
+
+Linux:
+
+```bash
 npm ci
 ```
 
 ### 2. Configure the UI
 
-On first setup, create `.env.local` from `.env.example`. If `.env.local` already exists, update it rather than overwriting its settings.
+On first setup, create `.env.local` from `.env.example`. Run this copy command
+only if `.env.local` does not already exist.
 
-```bat
-copy .env.example .env.local
+Windows PowerShell:
+
+```powershell
+Copy-Item .env.example .env.local
+```
+
+Linux:
+
+```bash
+cp .env.example .env.local
 ```
 
 Use these settings for the current Spring Boot backend:
@@ -74,35 +92,42 @@ AUTH_STORE_CLAIM=store_id
 
 Leave `AUTH_JWKS_URL` unset for this HMAC-based backend. Supply the backend's Base64 signing secret as `JWT_SIGNING_SECRET` in the frontend terminal, or as `AUTH_JWT_SECRET` in the ignored `.env.local`. `JWT_SIGNING_SECRET` takes precedence. The decoded secret must be at least 32 bytes; keep it server-side and never use a `NEXT_PUBLIC_` prefix.
 
-### 3. Retrieve the existing AWS signing secret
+### 3. Load the existing AWS signing secret
 
-Run this in the same Command Prompt that will start the UI:
+Run the command for your terminal. It loads the secret without printing it.
 
-```bat
-set "AWS_PROFILE=vishnu-analyticalrx"
-set "AWS_REGION=us-east-1"
-
-for /f "delims=" %S in ('aws secretsmanager get-secret-value --region us-east-1 --secret-id analytical-rx/phase1/dev/jwt-signing-secret --query SecretString --output text') do set "JWT_SIGNING_SECRET=%S"
-
-if defined JWT_SIGNING_SECRET (echo JWT secret loaded) else (echo JWT secret missing)
-```
-
-Use your configured AWS profile if it differs. This retrieves the stored secret; it does not create a new one. Use `%%S` in a `.bat` file. Environment variables set in another terminal are not inherited by this terminal.
-
-PowerShell alternative:
+Windows PowerShell:
 
 ```powershell
-cd C:\analytical_rx\UI
-$env:AWS_PROFILE = 'vishnu-analyticalrx'
-$env:JWT_SIGNING_SECRET = aws secretsmanager get-secret-value `
-  --region us-east-1 `
-  --secret-id analytical-rx/phase1/dev/jwt-signing-secret `
-  --query SecretString --output text
+$env:AWS_PROFILE = 'my-analyticalrx'
+$env:JWT_SIGNING_SECRET = aws secretsmanager get-secret-value --region us-east-1 --secret-id analytical-rx/phase1/dev/jwt-signing-secret --query SecretString --output text
 ```
+
+Linux:
+
+```bash
+export AWS_PROFILE=my-analyticalrx
+export JWT_SIGNING_SECRET="$(aws secretsmanager get-secret-value --region us-east-1 --secret-id analytical-rx/phase1/dev/jwt-signing-secret --query SecretString --output text)"
+```
+
+Replace `my-analyticalrx` with your AWS profile name. If you use the default
+AWS profile, omit the `AWS_PROFILE` line. Keep this terminal open: environment
+variables are not shared between terminals. This secret is read-only; the
+command does not create or change it.
 
 ### 4. Start and sign in
 
-```bat
+In the same terminal:
+
+Windows PowerShell:
+
+```powershell
+npm run dev
+```
+
+Linux:
+
+```bash
 npm run dev
 ```
 
