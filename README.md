@@ -1,10 +1,18 @@
 # AnalyticalRx UI
 
-For the completed responsiveness and task-management work, see the [UI change log — 7 October 2026](docs/ui-change-log-2026-10-07.md). It includes the file inventory, API coverage, role permissions, verification results, limitations, and future responsiveness requirements.
-
 AnalyticalRx UI is the frontend for a multi-tenant pharmacy operations platform. It lets users sign in through the Data Platform backend and opens a workspace based on the verified role in their JWT. Owners can view portfolio dashboards, explore the workflow studio, and prepare individual or bulk user additions.
 
 The project uses Next.js 16.3.1 (App Router), React 19, TypeScript, and `jose` for server-side JWT verification. Authentication is connected to the backend. Dashboards default to unavailable states with optional, clearly labeled sample previews. Workflows and user administration remain frontend previews.
+
+## Documentation
+
+- [Run locally](#run-locally): prerequisites, environment settings, and startup commands.
+- [UI documentation index](docs/README.md): UI behavior, implementation notes, and dated changes.
+- [Central onboarding and documentation map](https://github.com/analyticalrx/analytical-rx-documentation/blob/main/documentation-map.md): shared setup and system references.
+- [Backend setup](https://github.com/analyticalrx/data-platform/blob/main/README.md#local-setup) and [implemented API contract](https://github.com/analyticalrx/data-platform/blob/main/docs/ui-api-contract.md): backend startup and current integration behavior.
+
+Maintain UI setup and behavior notes in this repository. Follow links to shared
+AWS/database setup and backend contracts rather than copying their instructions.
 
 ## Main components
 
@@ -42,7 +50,8 @@ The project uses Next.js 16.3.1 (App Router), React 19, TypeScript, and `jose` f
 - AWS CLI and access to Secrets Manager if retrieving the signing secret from AWS.
 
 The backend needs its database connection and SSM tunnel running separately.
-Follow the local setup in the `data-platform` repository's `README.md`. The UI
+Follow the [backend local setup](https://github.com/analyticalrx/data-platform/blob/main/README.md#local-setup),
+which links to the shared database access guide. The UI
 itself does not need database credentials.
 
 ### 1. Install dependencies
